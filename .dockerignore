@@ -1,0 +1,44 @@
+# ------------------------------------------ #
+# AI Knowledge Copilot - .dockerignore         #
+# ------------------------------------------ #
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build output
+build/
+dist/
+.next/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.*
+crash.log
+crash.*.log
+
+# Test coverage
+coverage/
+*.coveragerc
+
+# Logs
+*.log

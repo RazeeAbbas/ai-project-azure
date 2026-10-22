@@ -1,0 +1,455 @@
+# ============================================================
+# AI Knowledge Copilot - Complete Kubernetes Manifests
+# ============================================================
+
+# 1. Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    environment: dev
+
+---
+# 2. Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aikc-sa
+  namespace: ai-knowledge-copilot
+automountServiceAccountToken: true
+
+---
+# 3. RBAC - Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aikc-role
+  namespace: ai-knowledge-copilot
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+# 4. RBAC - RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aikc-rolebinding
+  namespace: ai-knowledge-copilot
+subjects:
+  - kind: ServiceAccount
+    name: aikc-sa
+    namespace: ai-knowledge-copilot
+roleRef:
+  kind: Role
+  name: aikc-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 5. ConfigMap - Backend non-secret configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: ai-knowledge-copilot
+data:
+  APP_ENVIRONMENT: "dev"
+  APP_LOG_LEVEL: "INFO"
+  ENABLE_RAG: "true"
+  ENABLE_METRICS: "true"
+  ENABLE_FALLBACK_RESPONSE: "true"
+  RAG_TOP_K: "5"
+  CORS_ORIGINS: "http://localhost:5173,http://frontend:80"
+
+---
+# 6. Secret - Backend sensitive configuration (base64-encoded)
+# IMPORTANT: Replace these placeholder values with real base64-encoded secrets
+# kubectl create secret generic backend-secrets --from-literal=AZURE_OPENAI_API_KEY=... -n ai-knowledge-copilot
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secrets
+  namespace: ai-knowledge-copilot
+type: Opaque
+stringData:
+  AZURE_OPENAI_ENDPOINT: "https://REPLACE_WITH_YOUR_ENDPOINT.openai.azure.com/"
+  AZURE_OPENAI_API_KEY: "REPLACE_WITH_YOUR_KEY"
+  DATABASE_URL: "postgresql://copilotadmin:REPLACE_WITH_PASSWORD@REPLACE_WITH_HOST:5432/aikcopilot"
+  AZURE_SEARCH_ENDPOINT: "https://REPLACE_WITH_YOUR_SEARCH.search.windows.net"
+  AZURE_SEARCH_KEY: "REPLACE_WITH_YOUR_SEARCH_KEY"
+  AZURE_STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;AccountName=REPLACE;AccountKey=REPLACE"
+  JWT_SECRET_KEY: "REPLACE_WITH_STRONG_SECRET"
+
+---
+# 7. Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-knowledge-copilot-backend
+  namespace: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    component: backend
+  annotations:
+    kubernetes.io/change-cause: "Initial deployment"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-knowledge-copilot
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: ai-knowledge-copilot
+        component: backend
+    spec:
+      serviceAccountName: aikc-sa
+      containers:
+        - name: backend
+          image: REPLACE_ACR_NAME.azurecr.io/ai-knowledge-copilot-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 40
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: tmp-vol
+              mountPath: /tmp
+            - name: logs-vol
+              mountPath: /app/logs
+      volumes:
+        - name: tmp-vol
+          emptyDir: {}
+        - name: logs-vol
+          emptyDir: {}
+      restartPolicy: Always
+
+---
+# 8. Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-knowledge-copilot-backend
+  namespace: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: ai-knowledge-copilot
+    component: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+
+---
+# 9. Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-knowledge-copilot-frontend
+  namespace: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    component: frontend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-knowledge-copilot
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: ai-knowledge-copilot
+        component: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: REPLACE_ACR_NAME.azurecr.io/ai-knowledge-copilot-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 128m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101   # nginx user on alpine
+            allowPrivilegeEscalation: false
+
+---
+# 10. Frontend Service (LoadBalancer for external access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-knowledge-copilot-frontend
+  namespace: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    component: frontend
+spec:
+  type: LoadBalancer
+  selector:
+    app: ai-knowledge-copilot
+    component: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+
+---
+# 11. HorizontalPodAutoscaler - Backend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: ai-knowledge-copilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-knowledge-copilot-backend
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# 12. HorizontalPodAutoscaler - Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: ai-knowledge-copilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-knowledge-copilot-frontend
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# 13. Ingress (NGINX)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-knowledge-copilot-ingress
+  namespace: ai-knowledge-copilot
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  rules:
+    - host: ""   # Replace with your domain or AKS public IP
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-knowledge-copilot-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-knowledge-copilot-frontend
+                port:
+                  number: 80
+
+---
+# 10. Frontend Service (LoadBalancer for external access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-knowledge-copilot-frontend
+  namespace: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    component: frontend
+spec:
+  type: LoadBalancer
+  selector:
+    app: ai-knowledge-copilot
+    component: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+
+---
+# 11. HorizontalPodAutoscaler - Backend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: ai-knowledge-copilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-knowledge-copilot-backend
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# 12. HorizontalPodAutoscaler - Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: ai-knowledge-copilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-knowledge-copilot-frontend
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# 13. Ingress (NGINX)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-knowledge-copilot-ingress
+  namespace: ai-knowledge-copilot
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  rules:
+    - host: ""   # Replace with your domain or AKS public IP
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-knowledge-copilot-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-knowledge-copilot-frontend
+                port:
+                  number: 80
+

@@ -1,0 +1,289 @@
+{{- /* Namespace */ -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    app: ai-knowledge-copilot
+    environment: {{ .Values.environment }}
+---
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.serviceAccount.name | default "aikc-sa" }}
+  namespace: {{ .Values.namespace }}
+---
+{{- end }}
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aikc-role
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aikc-rolebinding
+  namespace: {{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name | default "aikc-sa" }}
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: Role
+  name: aikc-role
+  apiGroup: rbac.authorization.k8s.io
+---
+{{- end }}
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: {{ .Values.namespace }}
+data:
+  {{- range $k, $v := .Values.backend.envConfig }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+---
+# Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secrets
+  namespace: {{ .Values.namespace }}
+type: Opaque
+stringData:
+  AZURE_OPENAI_ENDPOINT: {{ .Values.secrets.azureOpenAIEndpoint | quote }}
+  AZURE_OPENAI_API_KEY: {{ .Values.secrets.azureOpenAIKey | quote }}
+  DATABASE_URL: {{ .Values.secrets.databaseURL | quote }}
+  AZURE_SEARCH_ENDPOINT: {{ .Values.secrets.azureSearchEndpoint | quote }}
+  AZURE_SEARCH_KEY: {{ .Values.secrets.azureSearchKey | quote }}
+  AZURE_STORAGE_CONNECTION_STRING: {{ .Values.secrets.azureStorageConnectionString | quote }}
+  JWT_SECRET_KEY: {{ .Values.secrets.jwtSecretKey | quote }}
+---
+# Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-knowledge-copilot-backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: ai-knowledge-copilot
+    component: backend
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-knowledge-copilot
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: ai-knowledge-copilot
+        component: backend
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name | default "aikc-sa" }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 40
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tmp-vol
+              mountPath: /tmp
+      volumes:
+        - name: tmp-vol
+          emptyDir: {}
+---
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-knowledge-copilot-backend
+  namespace: {{ .Values.namespace }}
+spec:
+  type: {{ .Values.backend.service.type }}
+  selector:
+    app: ai-knowledge-copilot
+    component: backend
+  ports:
+    - port: {{ .Values.backend.service.port }}
+      targetPort: 8000
+---
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-knowledge-copilot-frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: ai-knowledge-copilot
+    component: frontend
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-knowledge-copilot
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: ai-knowledge-copilot
+        component: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - containerPort: 80
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-knowledge-copilot-frontend
+  namespace: {{ .Values.namespace }}
+spec:
+  type: {{ .Values.frontend.service.type }}
+  selector:
+    app: ai-knowledge-copilot
+    component: frontend
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: 80
+---
+{{- if .Values.backend.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: {{ .Values.namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-knowledge-copilot-backend
+  minReplicas: {{ .Values.backend.hpa.minReplicas }}
+  maxReplicas: {{ .Values.backend.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.backend.hpa.cpuThreshold }}
+---
+{{- end }}
+{{- if .Values.frontend.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: {{ .Values.namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-knowledge-copilot-frontend
+  minReplicas: {{ .Values.frontend.hpa.minReplicas }}
+  maxReplicas: {{ .Values.frontend.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.frontend.hpa.cpuThreshold }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-knowledge-copilot-ingress
+  namespace: {{ .Values.namespace }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | quote }}
+    {{- range $k, $v := .Values.ingress.annotations }}
+    {{ $k }}: {{ $v | quote }}
+    {{- end }}
+spec:
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-knowledge-copilot-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-knowledge-copilot-frontend
+                port:
+                  number: 80
+{{- end }}

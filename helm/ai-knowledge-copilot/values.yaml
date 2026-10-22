@@ -1,0 +1,81 @@
+# ------------------------------------------ #
+# AI Knowledge Copilot - Helm Default Values   #
+# Override per environment in values-*.yaml    #
+# ------------------------------------------ #
+
+namespace: ai-knowledge-copilot
+environment: dev
+
+backend:
+  image:
+    repository: REPLACE_ACR_NAME.azurecr.io/ai-knowledge-copilot-backend
+    pullPolicy: Always
+    tag: "latest"
+  replicas: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  service:
+    type: ClusterIP
+    port: 8000
+  envConfig:
+    APP_ENVIRONMENT: "dev"
+    APP_LOG_LEVEL: "INFO"
+    ENABLE_RAG: "true"
+    ENABLE_METRICS: "true"
+    ENABLE_FALLBACK_RESPONSE: "true"
+    CORS_ORIGINS: "http://localhost:5173"
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    cpuThreshold: 70
+
+frontend:
+  image:
+    repository: REPLACE_ACR_NAME.azurecr.io/ai-knowledge-copilot-frontend
+    pullPolicy: Always
+    tag: "latest"
+  replicas: 2
+  resources:
+    requests:
+      cpu: 128m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  service:
+    type: LoadBalancer
+    port: 80
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    cpuThreshold: 70
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ""
+  annotations: {}
+
+serviceAccount:
+  create: true
+  name: "aikc-sa"
+
+rbac:
+  create: true
+
+# These are PLACEHOLDERS — set real values via helm --set or --values
+secrets:
+  azureOpenAIEndpoint: "https://REPLACE.openai.azure.com/"
+  azureOpenAIKey: "REPLACE"
+  databaseURL: "postgresql://copilotadmin:REPLACE@REPLACE:5432/aikcopilot"
+  azureSearchEndpoint: "https://REPLACE.search.windows.net"
+  azureSearchKey: "REPLACE"
+  azureStorageConnectionString: "REPLACE"
+  jwtSecretKey: "REPLACE"

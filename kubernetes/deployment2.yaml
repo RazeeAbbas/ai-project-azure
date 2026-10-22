@@ -1,0 +1,111 @@
+
+---
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-knowledge-copilot-backend
+  namespace: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    component: backend
+spec:
+  selector:
+    app: ai-knowledge-copilot
+    component: backend
+  ports:
+    - port: 80
+      targetPort: 8000
+      name: http
+  type: ClusterIP
+
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-knowledge-copilot-frontend
+  namespace: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    component: frontend
+spec:
+  selector:
+    app: ai-knowledge-copilot
+    component: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  type: LoadBalancer
+
+---
+# Horizontal Pod Autoscaler - Backend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-knowledge-copilot-backend-hpa
+  namespace: ai-knowledge-copilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-knowledge-copilot-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# Horizontal Pod Autoscaler - Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-knowledge-copilot-frontend-hpa
+  namespace: ai-knowledge-copilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-knowledge-copilot-frontend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# ConfigMap for Backend Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-kc-backend-config
+  namespace: ai-knowledge-copilot
+data:
+  APP_ENVIRONMENT: "production"
+  APP_DEBUG: "false"
+  AZURE_OPENAI_DEPLOYMENT: "gpt-4o-mini"
+  AZURE_OPENAI_EMBEDDING_DEPLOYMENT: "text-embedding-ada-002"
+  RAG_TOP_K: "5"
+  RAG_SCORE_THRESHOLD: "0.7"
+
+---
+# Secret for Azure OpenAI
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ai-kc-backend-secrets
+  namespace: ai-knowledge-copilot
+type: Opaque
+data:
+  AZURE_OPENAI_API_KEY: "YOUR_BASE64_ENCODED_KEY"
+  JWT_SECRET_KEY: "YOUR_BASE64_ENCODED_KEY"

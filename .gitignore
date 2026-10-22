@@ -1,0 +1,106 @@
+# ------------------------------------------ #
+# AI Knowledge Copilot - Git Ignore          #
+# ------------------------------------------ #
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+
+# Build outputs
+dist/
+build/
+*.tar
+*.zip
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.*
+*.tfplan
+/terraform/environments/*/tfplan
+crash.log
+crash.*.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Monitoring
+grafana/dashboards/*
+
+# Helm
+*.tgz
+
+# Secrets
+*.key
+*.pem
+*.ppk
+id_rsa
+
+# Coverage
+htmlcov/
+*.cover
+coverage.xml
+*.coveragerc
+
+# Logs
+*.log
+logs/
+
+# Temporary diagnostic output
+env_tmp/
+
