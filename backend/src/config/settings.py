@@ -57,8 +57,8 @@ class Settings(BaseSettings):
     # ------------------------------------------ #
     # Vector Store (Azure AI Search)
     # ------------------------------------------ #
-    AZURE_SEARCH_ENDPOINT: str = Field(..., env="AZURE_SEARCH_ENDPOINT")
-    AZURE_SEARCH_KEY: str = Field(..., env="AZURE_SEARCH_KEY")
+    AZURE_SEARCH_ENDPOINT: str = Field(default="", env="AZURE_SEARCH_ENDPOINT")
+    AZURE_SEARCH_KEY: str = Field(default="", env="AZURE_SEARCH_KEY")
     AZURE_SEARCH_INDEX: str = Field(default="kicopilot-index", env="AZURE_SEARCH_INDEX")
     AZURE_SEARCH_FIELD_ID: str = Field(default="id", env="AZURE_SEARCH_FIELD_ID")
     AZURE_SEARCH_FIELD_CONTENT: str = Field(default="content", env="AZURE_SEARCH_FIELD_CONTENT")

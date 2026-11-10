@@ -59,6 +59,11 @@ variable "database_name" {
   default     = "aikcopilot"
 }
 
+variable "allowed_ip_address" {
+  description = "Public IP address allowed to connect to PostgreSQL"
+  type        = string
+}
+
 variable "tags" {
   description = "Tags"
   type        = map(string)
@@ -86,12 +91,12 @@ resource "azurerm_postgresql_flexible_server_database" "main" {
   charset   = "utf8"
 }
 
-# Allow Azure internal connections (0.0.0.0)
-resource "azurerm_postgresql_flexible_server_firewall_rule" "azure_access" {
-  name             = "AllowAzureServices"
+# Allow AKS outbound traffic to reach PostgreSQL.
+resource "azurerm_postgresql_flexible_server_firewall_rule" "aks" {
+  name             = "AllowAKS"
   server_id        = azurerm_postgresql_flexible_server.main.id
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "0.0.0.0"
+  start_ip_address = var.allowed_ip_address
+  end_ip_address   = var.allowed_ip_address
 }
 
 output "postgresql_server_name" {

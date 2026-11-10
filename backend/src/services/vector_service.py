@@ -111,3 +111,8 @@ class VectorService:
         except Exception as e:
             logger.error(f"Error searching vector database: {str(e)}")
             return []
+
+
+async def check_vector_store_connection() -> str:
+    """Report the local mock vector store as available."""
+    return "healthy"

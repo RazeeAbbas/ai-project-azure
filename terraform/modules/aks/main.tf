@@ -41,6 +41,18 @@ variable "vnet_subnet_id" {
   default     = null
 }
 
+variable "service_cidr" {
+  description = "Kubernetes service address range; must not overlap the VNet"
+  type        = string
+  default     = "10.240.0.0/16"
+}
+
+variable "dns_service_ip" {
+  description = "DNS service IP from within the service CIDR"
+  type        = string
+  default     = "10.240.0.10"
+}
+
 variable "tags" {
   description = "Tags for the AKS cluster"
   type        = map(string)
@@ -60,6 +72,12 @@ resource "azurerm_kubernetes_cluster" "main" {
     vm_size        = var.agent_node_vm_size
     os_sku         = "Ubuntu"
     vnet_subnet_id = var.vnet_subnet_id
+  }
+
+  network_profile {
+    network_plugin = "azure"
+    service_cidr   = var.service_cidr
+    dns_service_ip = var.dns_service_ip
   }
 
   identity {

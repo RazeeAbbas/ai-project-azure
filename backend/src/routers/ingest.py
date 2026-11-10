@@ -6,12 +6,13 @@
 Document ingestion router.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 import logging
 
 from src.schemas import IngestionRequest, ChunkInfo, ChunkListResponse
 from src.services.document_service import DocumentService
+from src.core.helpers import generate_request_id
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 logger = logging.getLogger(__name__)

@@ -19,6 +19,11 @@ from typing import Optional
 from src.config.settings import settings
 
 
+def get_logger(name: str) -> logging.Logger:
+    """Return a configured logger for a module."""
+    return logging.getLogger(name)
+
+
 def get_log_file_path() -> Path:
     """Get the log file path."""
     log_dir = Path(__file__).parent.parent.parent / "logs"

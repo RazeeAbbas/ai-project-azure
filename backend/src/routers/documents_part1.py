@@ -80,6 +80,7 @@ async def upload_document(
         
         # Trigger ingestion
         await document_service.ingest_document(document.id)
+        document = await document_service.get_document(document.id) or document
         
         logger.info(f"[{request_id}] Document uploaded successfully: {document.id}", extra={"request_id": request_id})
         

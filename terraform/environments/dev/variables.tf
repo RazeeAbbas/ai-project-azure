@@ -1,7 +1,3 @@
-# ------------------------------------------ #
-# AI Knowledge Copilot - Dev Variables         #
-# ------------------------------------------ #
-
 variable "environment" {
   description = "Deployment environment name"
   type        = string
@@ -12,6 +8,12 @@ variable "location" {
   description = "Azure region for deployment"
   type        = string
   default     = "eastus"
+}
+
+variable "aks_location" {
+  description = "Azure region for AKS and its dedicated virtual network"
+  type        = string
+  default     = "centralus"
 }
 
 variable "kubernetes_version" {
@@ -29,7 +31,7 @@ variable "node_count" {
 variable "agent_node_vm_size" {
   description = "VM size for agent nodes"
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D2s_v7"
 }
 
 variable "app_service_plan_sku" {
@@ -60,7 +62,6 @@ variable "db_admin_password" {
   description = "Database administrator password"
   type        = string
   sensitive   = true
-  default     = "P@ssw0rdDev2026!#"
 }
 
 variable "common_tags" {

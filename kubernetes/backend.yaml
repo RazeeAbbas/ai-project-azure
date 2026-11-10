@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: ai-knowledge-copilot
+data:
+  APP_ENVIRONMENT: "production"
+  APP_LOG_LEVEL: "INFO"
+  AZURE_OPENAI_API_VERSION: "2024-10-01"
+  ENABLE_RAG: "true"
+  ENABLE_METRICS: "true"
+  ENABLE_FALLBACK_RESPONSE: "true"
+  RAG_TOP_K: "5"
+  CORS_ORIGINS: "http://172.168.131.30"
+  EMBEDDING_DIMENSION: "1536"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-knowledge-copilot-backend
+  namespace: ai-knowledge-copilot
+  labels:
+    app: ai-knowledge-copilot
+    component: backend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-knowledge-copilot
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: ai-knowledge-copilot
+        component: backend
+    spec:
+      containers:
+        - name: backend
+          image: aicopdevz4ep7yacr.azurecr.io/ai-knowledge-copilot-backend:20261023-5
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false

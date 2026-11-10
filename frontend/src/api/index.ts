@@ -13,9 +13,8 @@ export const uploadDocument = (file: File, title?: string): Promise<Document> =>
   const form = new FormData()
   form.append('file', file)
   if (title) form.append('title', title)
-  return api.post('/documents', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }).then((r) => r.data)
+  // Do NOT set Content-Type — let axios set it with the boundary parameter
+  return api.post('/documents', form).then((r) => r.data)
 }
 
 export const getDocument = (id: string): Promise<Document> =>

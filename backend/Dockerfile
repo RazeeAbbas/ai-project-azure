@@ -24,6 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Production stage
 FROM python:3.11-slim as production
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Create app user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
@@ -41,6 +44,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY src ./src
 COPY --chown=appuser:appuser . .
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
 
 # Expose port
 EXPOSE 8000

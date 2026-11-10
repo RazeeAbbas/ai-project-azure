@@ -1,6 +1,3 @@
-# ------------------------------------------ #
-# AI Knowledge Copilot - Networking Module     #
-# ------------------------------------------ #
 
 variable "virtual_network_name" {
   description = "Name of the virtual network"

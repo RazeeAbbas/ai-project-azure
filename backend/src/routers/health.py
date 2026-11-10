@@ -6,12 +6,12 @@
 Health check and readiness probes router.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
-import asyncio
+from src.config.settings import settings, get_version_info
+from src.core.helpers import get_current_timestamp
 
-from src.config.settings import settings
 from src.services.db_service import check_database_connection
 from src.services.redis_service import ping_redis
 from src.services.vector_service import check_vector_store_connection
@@ -45,8 +45,8 @@ async def read_health():
         "service": settings.APP_NAME,
         "version": "1.0.0",
         "checks": {},
-        "build_info": settings.get_version_info(),
-        "timestamp": settings.get_current_timestamp()
+        "build_info": get_version_info(),
+        "timestamp": get_current_timestamp().isoformat()
     }
     
     # Check Azure OpenAI
@@ -89,25 +89,15 @@ async def read_health():
         status["checks"]["storage"] = f"warn: {str(e)}"
     
     # Determine overall status
-    all_checks = status["checks"]
-    critical_checks = ["database", "vector_store"]
-    
-    all_healthy = all(
-        v == "healthy" or v == "configured" 
-        for k, v in all_checks.items() 
-        if k not in critical_checks
-    )
-    
-    any_healthy = any(
-        v == "healthy" or v == "configured" 
-        for k, v in all_checks.items() 
-        if k not in critical_checks
-    )
-    
-    if all(v == "healthy" for v in all_checks.values()):
-        status["status"] = "healthy"
-    elif any(v == "error" or v.startswith("error") for v in all_checks.values()):
+    check_values = [
+        value for key, value in status["checks"].items()
+        if key != "openai_config"
+    ]
+
+    if any(isinstance(value, str) and value.startswith("error") for value in check_values):
         status["status"] = "degraded"
+    elif all(value in {"healthy", "configured"} for value in check_values):
+        status["status"] = "healthy"
     else:
         status["status"] = "partial"
     
@@ -122,18 +112,9 @@ async def read_ready():
     Used by Kubernetes for deployment readiness.
     Returns 200 when the service is ready to accept traffic.
     """
-    required_checks = ["azure_openai", "database"]
-    
-    for check in required_checks:
-        if check in status["checks"]:
-            if status["checks"][check] in ["error", "not_configured"]:
-                return {
-                    "status": "not_ready",
-                    "reason": f"{check} not ready",
-                    "checks": status["checks"]
-                }
-    
-    return {
-        "status": "ready",
-        "checks": status["checks"]
-    }
+    health = await read_health()
+    checks = health.checks
+    if checks.get("database") != "healthy":
+        raise HTTPException(status_code=503, detail={"status": "not_ready", "checks": checks})
+
+    return {"status": "ready", "checks": checks}

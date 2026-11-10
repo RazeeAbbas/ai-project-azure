@@ -27,7 +27,7 @@ class EmbeddingService:
     
     def __init__(self):
         self.embedding_deployment = settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT
-        self.model = settings.AZURE_OPENAI_EMBEDDMENT_DEPLOYMENT if settings.AZURE_OPENAI_EMBEDDMENT_DEPLOYMENT else "text-embedding-ada-002"
+        self.model = self.embedding_deployment
         self.is_configured = (
             settings.AZURE_OPENAI_ENDPOINT and 
             settings.AZURE_OPENAI_API_KEY

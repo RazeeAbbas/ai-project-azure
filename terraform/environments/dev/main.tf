@@ -1,6 +1,3 @@
-# ------------------------------------------ #
-# AI Knowledge Copilot - Terraform Dev Config  #
-# ------------------------------------------ #
 
 terraform {
   required_version = ">= 1.5.0"
@@ -67,6 +64,24 @@ module "networking" {
   tags = var.common_tags
 }
 
+# AKS must use a VNet in the same Azure region as the cluster.
+module "networking_aks" {
+  source = "../../modules/networking"
+
+  resource_group_name  = module.resource_group.resource_group_name
+  location             = var.aks_location
+  environment          = var.environment
+  virtual_network_name = "${local.name_prefix}-aks-vnet"
+  address_space        = "10.1.0.0/16"
+  subnets = [
+    {
+      name = "aks-subnet"
+      cidr = "10.1.1.0/24"
+    }
+  ]
+  tags = var.common_tags
+}
+
 # 3. Azure Container Registry
 module "acr" {
   source = "../../modules/acr"
@@ -84,13 +99,13 @@ module "acr" {
 module "aks" {
   source = "../../modules/aks"
 
-  aks_name            = "${local.name_prefix}-aks"
+  aks_name            = "aks-copilot-dev-cin"
   resource_group_name = module.resource_group.resource_group_name
-  location            = module.resource_group.location
+  location            = var.aks_location
   kubernetes_version  = var.kubernetes_version
   node_count          = var.node_count
   agent_node_vm_size  = var.agent_node_vm_size
-  vnet_subnet_id      = module.networking.subnet_ids["aks-subnet"]
+  vnet_subnet_id      = module.networking_aks.subnet_ids["aks-subnet"]
   tags                = var.common_tags
 }
 
@@ -124,12 +139,13 @@ module "database" {
 
   postgresql_name        = "${local.name_prefix}-psql"
   resource_group_name    = module.resource_group.resource_group_name
-  location               = module.resource_group.location
+  location               = var.aks_location
   administrator_login    = var.db_admin_username
   administrator_password = var.db_admin_password
   sku_name               = var.db_sku
   storage_mb             = var.db_storage_mb
   database_name          = "aikcopilot"
+  allowed_ip_address     = "64.236.96.123"
   tags                   = var.common_tags
 }
 

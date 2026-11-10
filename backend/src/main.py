@@ -35,6 +35,7 @@ from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATE
 from src.config.settings import settings
 from src.routers import health, documents, questions, ingest
 from src.core.logging import setup_logging, get_logger
+from src.services.db_service import close_pool, init_database
 
 # Setup structured logging
 setup_logging()
@@ -61,7 +62,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup
     logger.info("Starting AI Knowledge Copilot backend")
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"Environment: {settings.APP_ENVIRONMENT}")
     logger.info(f"Azure OpenAI Endpoint: {settings.AZURE_OPENAI_ENDPOINT[:15]}...{settings.AZURE_OPENAI_ENDPOINT[-10:]}")
     logger.info(f"Database: {settings.DATABASE_HOST}:{settings.DATABASE_PORT}")
     
@@ -76,10 +77,12 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Missing configuration: {', '.join(missing_vars)}")
         logger.warning("AI/RAG features will be disabled in production")
     
-    yield
-    
-    # Shutdown
-    logger.info("Shutting down AI Knowledge Copilot backend")
+    await init_database()
+    try:
+        yield
+    finally:
+        await close_pool()
+        logger.info("Shutting down AI Knowledge Copilot backend")
 
 app = FastAPI(
     title="AI Knowledge Copilot API",

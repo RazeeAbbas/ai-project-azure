@@ -12,10 +12,11 @@ from typing import Optional, List, Dict, Any
 import aiofiles
 
 try:
-    from azure.storage.blob import (
+    from azure.storage.blob import ContentSettings
+    from azure.storage.blob.aio import (
         BlobServiceClient,
         BlobClient,
-        ContainerClient
+        ContainerClient,
     )
     AZURE_STORAGE_AVAILABLE = True
 except ImportError:
@@ -88,17 +89,25 @@ class StorageService:
         """Upload a document to blob storage."""
         container = await self.container_client
         
-        blob_name = f"documents/{get_current_timestamp().replace(':', '-')}-{hash(file_name) & 0xFFFFFFFF}.bin"
+        extension = file_name.rsplit('.', 1)[-1] if '.' in file_name else 'bin'
+        blob_name = f"documents/{get_current_timestamp().replace(':', '-')}-{abs(hash(file_name)) % 1000000}.{extension}"
         
         if not self.is_local:
             blob_client = container.get_blob_client(blob_name)
             with open(file_path, "rb") as data:
-                await blob_client.upload_blob(data, overwrite=overwrite, content_type=content_type)
+                await blob_client.upload_blob(
+                    data,
+                    overwrite=overwrite,
+                    content_settings=ContentSettings(content_type=content_type),
+                )
             blob_url = f"{blob_client.url}"
         else:
             blob_url = f"http://127.0.0.1:10000/{self.container_name}/{blob_name}"
-            async with aiofiles.open(blob_url.replace("http://127.0.0.1:10000/", ""), "wb") as f:
-                pass  # Local mode placeholder
+            local_save_path = os.path.join("/tmp", blob_name)
+            os.makedirs(os.path.dirname(local_save_path), exist_ok=True)
+            with open(local_save_path, "wb") as f:
+                with open(file_path, "rb") as src:
+                    f.write(src.read())
         
         return blob_url
     
@@ -126,3 +135,17 @@ class StorageService:
             return True
         except Exception:
             return False
+
+
+async def check_storage_connection() -> str:
+    """Check configured Blob Storage access without exposing credentials."""
+    if not settings.AZURE_STORAGE_ACCOUNT_NAME and not settings.AZURE_STORAGE_CONNECTION_STRING:
+        return "not_configured"
+
+    try:
+        service = StorageService()
+        container = await service.container_client
+        await container.get_container_properties()
+        return "healthy"
+    except Exception as error:
+        return f"error: {error}"
